@@ -204,7 +204,12 @@ var loader = function(options, gpx_url) {
 			}
 			
 			// If all is well, proceed to extrude the GPX path.
-			g = new Gpex(options, pts);
+			gpexe = pts.map(p => new Gpex(options, p))
+			
+			// calculate the minimum scale factor, which means that this is the longest track. Every track should then be drawn with this scale
+			min_scale = gpexe.map(gpex => gpex.scale).reduce((a, b) => Math.min(a,b))
+			
+			gpexe[3].Draw(min_scale);
 		}
 	};
 	
@@ -253,22 +258,31 @@ function Gpex(options, pts) {
 	// array of marker objects. Members include location vector and orientation.
 	this.markers = [];
 	
+	this.Init(pts);
+}
+
+Gpex.prototype.Init = function(pts) {
+	// populates this.ll (lat/lon vectors) and this.markers
+	this.ScanPoints(pts);
+	
+	// populates projected point vectors
+	// results in a scale of the route
+	this.ProjectPoints();
+}
+
+Gpex.prototype.Draw = function(scale) {
 	// Catch and report any errors that occur during extrusion or display.
 	try {
-		this.Display(this.Extrude(pts));
+		this.Display(this.Extrude(scale));
 	} catch(e) {
 		Messages.error(e.message);
 	}
 }
 
-Gpex.prototype.Extrude = function(pts) {
+Gpex.prototype.Extrude = function(scale) {
 		
-	// populates this.ll (lat/lon vectors) and this.markers
-	this.ScanPoints(pts);
-	
-	// populates projected point vectors
-	this.ProjectPoints();
-	
+	this.scale = scale;
+
 	// fit returns a scaled and centered output unit [x, y, z] vector from input [x, y, z] projected vector
 	var that = this;
 	
@@ -353,7 +367,7 @@ Gpex.prototype.Display = function(code) {
 Gpex.prototype.ScanPoints = function(pts) {
 	
 	var that = this;
-	
+
 	var distFilter = function(points, mindist) {
 	
 		var pts = [];
@@ -386,7 +400,7 @@ Gpex.prototype.ScanPoints = function(pts) {
 		// using the initial distances and thereby remain fixed regardless of
 		// route smoothing, so we don't necessarily care that route length varies
 	};
-	
+
 	var lastpt = pts[0],
 		min_lon = lastpt[0],
 		max_lon = lastpt[0],
@@ -522,7 +536,7 @@ Gpex.prototype.ScanPoints = function(pts) {
 			orientation: marker_angle
 		});
 	}
-	
+
 	var smoothing_distance = this.options.smoothspan;
 
 	// Guestimate viable mindist based on scale if automatic smoothing
@@ -1122,20 +1136,21 @@ var Parser = {
 	
 	forceElev: false,
 	defaultElev: 1,
-	
+
 	// Parse GPX file, starting with tracks
 	// boolean forceElevation indicates if default should always be used or only if missing
 	// 
 	file: function(content, forceElevation, defaultElevation) {
 		this.forceElev = forceElevation;
 		this.defaultElev = defaultElevation;
-		var tracks = content.documentElement.getElementsByTagName('trk');
+		var tracks = [...content.documentElement.getElementsByTagName('trk')];
 		if (tracks.length === 0) {
 			Messages.error("This file does not appear to contain any tracks.<br />(Are you sure it is a GPX file?)");
 			return null;
 		}
+
 		// Note: only the first track is used
-		return this.track(tracks[0]);
+		return tracks.map(this.track, this);
 	},
 	
 	track: function(track) {
