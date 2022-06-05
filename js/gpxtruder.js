@@ -131,6 +131,7 @@ var submitInput = function() {
 		bedy:           parseFloat(form.depth.value),
 		base:           parseFloat(form.base.value),
 		zcut:           form.zoverride.checked ? false : form.zcut.checked,
+		concat_tracks:  form.concat_tracks.checked,
 		zoverride:      form.zoverride.checked,
 		zconstant:      parseFloat(form.zconstant.value),
 		regionfit:      form.regionfit.checked,
@@ -198,18 +199,43 @@ var loader = function(options, gpx_url) {
 			}
 			
 			// Attempt to parse response XML as a GPX file.
-			var pts = Parser.file(req.responseXML, options.zoverride, options.zconstant);
-			if (pts === null) {
+			var tracks = Parser.file(req.responseXML, options.zoverride, options.zconstant, options.concat_tracks);
+			if (tracks === null) {
 				return;
 			}
 			
 			// If all is well, proceed to extrude the GPX path.
-			gpexe = pts.map(p => new Gpex(options, p))
+			gpexe = tracks.map(track => new Gpex(options, track))
 			
 			// calculate the minimum scale factor, which means that this is the longest track. Every track should then be drawn with this scale
 			min_scale = gpexe.map(gpex => gpex.scale).reduce((a, b) => Math.min(a,b))
 			
-			gpexe[3].Draw(min_scale);
+			gpexe[0].Draw(min_scale);
+
+
+			if (gpexe.length > 1) {		
+				var track_select = document.getElementById('track_select');
+				
+				while (track_select.options.length > 0) {
+					track_select.remove(0);
+				}
+
+				gpexe.forEach((track, idx) => {
+					option = document.createElement( 'option' );
+					option.value = idx;
+					option.textContent = track.name;
+					track_select.appendChild( option );
+				});
+
+				track_select.addEventListener("change", function() {
+					var index = track_select.value;
+					gpexe[index].Draw(min_scale);
+				});
+
+				track_selection = document.getElementById('track_selection');
+				track_selection.style.display = "block";
+
+			}
 		}
 	};
 	
@@ -220,8 +246,10 @@ var loader = function(options, gpx_url) {
 };
 
 // use a tidier options object
-function Gpex(options, pts) {
+function Gpex(options, track) {
 	
+	this.name = track.name;
+
 	// read-only configuration
 	this.options = options;
 	
@@ -258,7 +286,7 @@ function Gpex(options, pts) {
 	// array of marker objects. Members include location vector and orientation.
 	this.markers = [];
 	
-	this.Init(pts);
+	this.Init(track.points);
 }
 
 Gpex.prototype.Init = function(pts) {
@@ -351,7 +379,7 @@ Gpex.prototype.Display = function(code) {
 	
 	// Update the preview display (required to prepare STL export,
 	// even if WebGL is not available to display the preview)
-	OJSCAD.setJsCad(code.jscad(true));
+	OJSCAD.setJsCad(code.jscad(true), this.name);
 	
 	// Display code for custom usage
 	this.options.jscadDiv.innerHTML = code.jscad(false);
@@ -537,7 +565,7 @@ Gpex.prototype.ScanPoints = function(pts) {
 		});
 	}
 
-	var smoothing_distance = this.options.smoothspan;
+	smoothing_distance = this.options.smoothspan;
 
 	// Guestimate viable mindist based on scale if automatic smoothing
 	// is enabled and the shape type is route (directional smoothing
@@ -1140,7 +1168,7 @@ var Parser = {
 	// Parse GPX file, starting with tracks
 	// boolean forceElevation indicates if default should always be used or only if missing
 	// 
-	file: function(content, forceElevation, defaultElevation) {
+	file: function(content, forceElevation, defaultElevation, concatTracks) {
 		this.forceElev = forceElevation;
 		this.defaultElev = defaultElevation;
 		var tracks = [...content.documentElement.getElementsByTagName('trk')];
@@ -1149,11 +1177,28 @@ var Parser = {
 			return null;
 		}
 
-		// Note: only the first track is used
-		return tracks.map(this.track, this);
+		var extracted_tracks = tracks.map(this.track, this);
+
+		if (concatTracks) {
+			extracted_tracks = [extracted_tracks.reduce((first, second) => {
+				return { 
+					name: undefined, 
+					points: first.points.concat(second.points)
+				}
+			})]
+		} 
+		
+		return extracted_tracks;
 	},
 	
 	track: function(track) {
+		var name_tags = track.getElementsByTagName('name');
+		var name;
+
+		if (name_tags.length > 0) {
+			name = name_tags[0].textContent;
+		}
+
 		var segments = track.getElementsByTagName('trkseg');
 		if (segments.length === 0) {
 			Messages.error("This file does not appear to contain any track segments.<br />(Are you sure it is a valid GPX file?)");
@@ -1174,7 +1219,10 @@ var Parser = {
 			return null;
 		}
 		
-		return pts;
+		return {
+			name: name,
+			points: pts
+		};
 	},
 	
 	segment: function(segment) {

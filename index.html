@@ -240,6 +240,10 @@
 
 			#statusspan {
 			}
+
+			#track_select {
+				margin-bottom: 10px;
+			}
 		</style>
 	</head>
 	<body onLoad="setup();">
@@ -280,7 +284,7 @@
 						<option value="0" selected>South Mountain</option>
 						<option value="1">Vestal XX (20k road race)</option>
 					</select><br />
-					<span class="info">GPXtruder only processes the first <a href="https://en.wikipedia.org/wiki/GPS_Exchange_Format#Data_types">track</a> in the GPX file.</span></p>
+					<span class="info">GPXtruder can processes all <a href="https://en.wikipedia.org/wiki/GPS_Exchange_Format#Data_types">tracks</a> of a GPX file to one route or process them all seperate.</span></p>
 				<details>
 					<summary>Route</summary>
 					<div class="group">
@@ -290,6 +294,8 @@
 						<span class="info">The default is used for all points of undefined elevation. Check <em>Force default</em> to disregard GPX elevation values.</span></p>
 						<p><input type="checkbox" id="zcut" value="1" checked /> <label for="zcut">Clip to minimum elevation</label><br />
 						<span class="info">Uncheck to show full elevation above sea level. No effect if <em>Force default</em> is checked.</span></p>
+						<p><input type="checkbox" id="concat_tracks" value="1" /> <label for="concat_tracks">Concatenate tracks</label><br />
+						<span class="info">Check if your gpx file contains multiple tracks and you want concatenate them to one track</span></p>
 						<p>Smoothing: <input type="radio" name="smooth" value="0" id="smooth_auto" onchange="return toggle(event, 1, 'mindist');" checked /> <label for="smooth_auto">Automatic</label> <input type="radio" name="smooth" value="1" id="smooth_manual" onchange="return toggle(event, 1, 'mindist');" /> <label for="smooth_manual">Manual minimum interval:</label> <input type="number" id="mindist" required min="0" step="1" value="0" disabled /> (meters)<br />
 						   <span class="info">Simplify the route by discarding points that are close together. Automatic smoothing computes interval based on model shape, size, and scale.</span></p>
 					</div>
@@ -337,6 +343,12 @@
 		
 		<div id="output" class="panel">
 			<p class="iolabel"><img src="img/output.png" width="166" height="31" alt="Output" /></p>
+			
+			<div id="track_selection" style="display: none;">
+				<span>Select your track: </span>
+				<select id="track_select">	
+				</select>
+			</div>
 			<div id="display"></div>
 			<details>
 				<summary>Parametric CAD Scripts</summary>
